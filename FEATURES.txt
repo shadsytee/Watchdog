@@ -1,0 +1,217 @@
+============================================================
+ Watchdog - Full Feature List
+============================================================
+This lists everything the program does - the features you use
+directly through the GUI, and the "hidden" ones working behind
+the scenes that you never have to think about but which quietly
+make the visible features reliable.
+
+
+------------------------------------------------------------
+ 1. WHAT IT MONITORS
+------------------------------------------------------------
+- Windows Service       - checks a named service is Running
+- Process               - checks a named .exe is running
+- TCP Port              - checks a host:port accepts connections
+- HTTP(S) URL           - checks a URL returns the status code you expect
+- TLS Certificate       - checks a site's certificate expiry date
+- VM Service (Hyper-V)  - checks a service INSIDE a Hyper-V guest VM,
+                          over PowerShell Direct (no network needed)
+- VM Process (Hyper-V)  - same, for a process inside a guest VM
+- VM State (Hyper-V)    - checks whether the VM itself is powered on
+                          (host-level, no guest credentials needed);
+                          can auto-start it if found off
+- Backup Drive Rotation - watches a drive letter reserved for rotating
+                          USB backup drives; tracks days since the last
+                          swap was detected (auto-detects disconnect +
+                          reconnect, or even a same-letter drive change
+                          missed between checks), with a two-tier
+                          Warning/Critical overdue threshold you set
+
+Each item is independent and can run at its own check interval -
+a critical service can be checked every 15 seconds while a slow
+certificate check only needs to run once a day.
+
+
+------------------------------------------------------------
+ 2. PER-ITEM SETTINGS
+------------------------------------------------------------
+- Friendly name, enabled/disabled toggle
+- Check interval (seconds) - independently tunable per item
+- Auto-restart when found down (Service/Process/VM types)
+- Max restart attempts before giving up
+- "Run as user" override for Process restarts - launch the
+  restarted process under a specific Windows account + password
+  instead of whatever account Watchdog itself is running as (fixes
+  apps whose login/license is tied to a particular user profile,
+  e.g. Plex, when Watchdog runs as SYSTEM)
+- Consecutive failures required before the first alert email
+- Re-notify interval while still down (0 = notify once and stay quiet)
+- Recovery email toggle (email when it comes back online)
+- Browse buttons to pick services/processes/VMs from live lists
+  instead of typing exact names
+
+
+------------------------------------------------------------
+ 3. ALERTING / EMAIL
+------------------------------------------------------------
+- HTML-formatted emails, colour-coded per situation:
+    DOWN / EXPIRED   - red
+    UP / RENEWED     - green
+    EXPIRING         - amber
+    DAILY (heartbeat) - blue
+    TEST             - grey
+- Subject format is "STATUS: Name" (e.g. "DOWN: PaperCut") so the
+  important part is visible even on a phone's truncated notification
+- Sender display name carries the app + machine name (e.g.
+  "Watchdog (PRINT01)"), keeping the subject line free of clutter
+- Recovery emails report how long the item was actually down for
+- Daily heartbeat email: one email/day with a colour-coded table of
+  every item's status, uptime %, and last response time
+- Send Test Email button with live pass/fail feedback
+- SMTP settings: server, port, SSL, username/password, From/To,
+  optional extra subject tag
+
+
+------------------------------------------------------------
+ 4. DASHBOARD / GUI
+------------------------------------------------------------
+- Settings are grouped into labelled sections with plain-language
+  descriptions, rather than a flat list of controls
+- "Test this check" button in the item editor runs a check before saving
+- Rarely-used item settings are collapsed behind an "Advanced" toggle
+- Colour-coded log with filter, copy, open-file, and follow controls
+- Keyboard shortcuts: Ctrl+N, F5, Ctrl+F, Enter, Esc
+------------------------------------------------------------
+- Live table of every monitored item: status, type, target, check
+  interval, uptime %, last response time, last detail message, last
+  checked time
+- Colour-coded rows and a status pill in the header (green/amber/red/grey)
+- Selection is preserved across automatic refreshes
+- System tray icon reflects overall health, with balloon notifications
+- Log tab: running activity/error log, also written to a file on disk
+- General, Email, and Monitored Items tabs for full configuration
+
+
+------------------------------------------------------------
+ 5. INSTALLATION / STARTUP
+------------------------------------------------------------
+- Install-Watchdog.bat: single self-contained installer file. Creates
+  C:\Watchdog, deploys the script + launcher + uninstaller into it,
+  adds a Desktop shortcut, and launches Watchdog immediately
+- Run-Watchdog.bat: double-click launcher, self-elevates via UAC,
+  runs the GUI hidden-console (only the app window shows)
+- Uninstall-Watchdog.bat: fully removes the app, the scheduled task,
+  the login-run entry, the Desktop shortcut, and all saved data -
+  asks for typed confirmation before doing anything
+- Two ways to auto-start:
+    * "Run at my Windows login" - starts with a visible tray icon
+      when you log in; no stored password needed
+    * "Install Startup Task" - registers a Scheduled Task that runs
+      Watchdog as SYSTEM at every boot, before anyone logs in, with
+      no visible window; immune to your account password changing
+
+
+------------------------------------------------------------
+ 6. CONFIG MANAGEMENT
+------------------------------------------------------------
+- Settings saved to a JSON config file (ProgramData, falling back to
+  AppData if that's not writable)
+- Automatic timestamped config backups on every Save (last 10 kept)
+- Export/Import config, so a working setup can be copied to another
+  machine (passwords are excluded from exports for security)
+- Config changes made in the GUI are picked up automatically by a
+  running background/headless instance within a few seconds - no
+  restart needed
+
+
+------------------------------------------------------------
+ 7. SECURITY
+------------------------------------------------------------
+- SMTP password, VM guest passwords, and "run as user" passwords are
+  all stored encrypted (Windows DPAPI), never in plain text
+- Encryption is machine-scoped, so the same encrypted value can be
+  decrypted whether Watchdog is running as you, a service account,
+  or SYSTEM on that machine
+
+
+============================================================
+ HIDDEN / UNDER-THE-HOOD FUNCTIONS
+============================================================
+These aren't separate buttons to press - they're safety nets and
+smart defaults working quietly in the background.
+
+- SINGLE-INSTANCE LOCK: only one running copy of Watchdog (the boot
+  task or a manually-opened window) is ever allowed to actually poll
+  items and send emails at a time. If you open the GUI while the
+  Startup Task is already running, the window still opens for
+  viewing/editing, but shows "Config only" and sends nothing itself -
+  this is what stops you getting duplicate alerts.
+
+- NON-BLOCKING EMAIL SENDING: the actual network transmission of
+  every email runs on a background thread, so sending mail (which can
+  take a second or two, longer if the server is slow) never freezes
+  the GUI, even when several items alert at once.
+
+- "KEEP TRYING UNTIL IT ACTUALLY SENDS": if the very first attempt to
+  email an alert fails (a transient SMTP hiccup), Watchdog keeps
+  retrying on subsequent checks until it succeeds, rather than
+  silently giving up - a failed send can never mean "nobody was ever
+  told," which is worse than a duplicate.
+
+- AUTO-HEAL RECOVERY EMAILS: if auto-restart fixes something fast
+  enough that it never crossed the alert threshold, you still get a
+  "back online" email (clearly marked as an auto-heal, since you were
+  never told it went down) rather than complete silence.
+
+- RETRY THROTTLING: alert retries and heartbeat retries are capped at
+  roughly once a minute/five minutes respectively, so a genuinely
+  down mail server gets retried sensibly rather than hammered.
+
+- BOUNDED TIMEOUTS: TLS certificate checks won't hang forever if a
+  server accepts the connection but never completes the handshake -
+  a socket-level timeout guarantees the check eventually reports Down
+  instead of freezing.
+
+- TYPE-AWARE SMART DEFAULTS: new items default their check interval
+  and "failures before emailing" based on what they actually monitor -
+  fast/cheap for local Service/Process/Port checks, hourly-scale for
+  certificates (which only change value once every few months and
+  shouldn't be hammered with a full TLS handshake every minute), and
+  a longer interval for Hyper-V VM checks (which carry real per-check
+  overhead). Editing an existing item never overrides your own
+  chosen values.
+
+- STARTUP GRACE PERIOD: for a configurable window after a genuine
+  Windows reboot (10 minutes by default), alert emails and auto-
+  restart actions are held back, so something that's simply still
+  starting up alongside the rest of the machine (a Hyper-V VM mid-
+  boot, a locally-hosted app that starts a moment after Windows does)
+  doesn't get mistaken for an outage. Checks and the dashboard keep
+  working normally throughout - only the outbound actions pause. It's
+  measured from the actual system boot time (not from when Watchdog
+  itself started), so restarting Watchdog mid-day for an unrelated
+  reason never triggers it.
+
+- HIDDEN RESTART WINDOWS: when Watchdog auto-restarts a Process-type
+  item, it launches hidden by default (no console window popping up),
+  unless a "Run as user" override is set, in which case a brief
+  console flash is possible (a Windows limitation of that specific
+  mechanism, not a bug).
+
+- SELF-VERIFYING INSTALLER: the Startup Task installer checks that
+  the task genuinely exists afterward rather than trusting a process
+  exit code, and writes the real error to the Log tab if it fails.
+
+- SELF-RELOCATING UNINSTALLER: if you run the uninstaller from inside
+  C:\Watchdog itself, it automatically copies itself out to a temp
+  location and relaunches from there first, so it's never trying to
+  delete the very folder it's actively running from.
+
+- LOG ROTATION: the on-disk log file automatically archives itself
+  once it passes 5MB, keeping the last 3 archives, so it can't grow
+  unbounded on a machine that runs for months.
+
+- CONFIG FILE WATCHER: a background file-system watcher notices when
+  the config file changes on disk (e.g. saved from another window)
+  and reloads automatically, without needing a restart.
