@@ -76,4 +76,4 @@ On Outlook / Microsoft 365 / Gmail, SMTP auth almost always needs an **app passw
 
 ## License
 
-[MIT](LICENSE) © 2026 Charles Patterson
+[MIT](LICENSE)
